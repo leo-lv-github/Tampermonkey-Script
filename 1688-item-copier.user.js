@@ -23,9 +23,15 @@
     let sheetId = GM_getValue("sheetId", "");
     // ===========================================
 
-    // 预设的 XPath (XML Path Language)
-    const XPATH_COMPANY = "/html/body/div[4]/div[2]/div[1]/div[1]/div/a/div[1]/a[1]/h1";
-    const XPATH_PRODUCT = "/html/body/div[4]/div[2]/div[2]/div/div[1]/div[1]/div[2]/div/div[1]/h1";
+    // 预设的 XPath (XML Path Language) - 多层试错
+    const XPATH_COMPANY = [
+        "/html/body/div[4]/div[2]/div[1]/div[1]/div/a/div[1]/a[1]/h1",
+        "/html/body/div[4]/div[1]/div[1]/div[1]/div/a/div[1]/a[1]/h1"
+    ];
+    const XPATH_PRODUCT = [
+        "/html/body/div[4]/div[2]/div[2]/div/div[1]/div[1]/div[2]/div/div[1]/h1",
+        "/html/body/div[4]/div[1]/div[2]/div/div[1]/div/div[2]/div/div[1]/h1"
+    ];
 
     // 用于在后台存储抓取到的数据
     const extractedData = {
@@ -34,15 +40,26 @@
         url: window.location.origin + window.location.pathname // 自动清理了 URL 中的追踪参数
     };
 
-    // 根据 XPath 获取 DOM 节点文本的辅助函数
-    function getTextByXPath(xpath) {
-        try {
-            const result = document.evaluate(xpath, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null);
-            return result.singleNodeValue ? result.singleNodeValue.textContent.trim() : "";
-        } catch (e) {
-            console.error("XPath 解析错误:", e);
-            return "";
+    // 根据 XPath 数组获取 DOM 节点文本的辅助函数（多层试错）
+    function getTextByXPath(xpathArray) {
+        for (const xpath of xpathArray) {
+            try {
+                const result = document.evaluate(xpath, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null);
+                if (result.singleNodeValue && result.singleNodeValue.textContent.trim() !== "") {
+                    return result.singleNodeValue.textContent.trim();
+                }
+            } catch (e) {
+                console.error("XPath 解析错误:", xpath, e);
+            }
         }
+        return "";
+    }
+
+    // 格式化显示名称（保留首尾各两个字）
+    function formatName(name) {
+        if (!name || name === "获取中..." || name.startsWith("未获取到")) return name;
+        if (name.length <= 4) return name;
+        return name.substring(0, 2) + "..." + name.substring(name.length - 2);
     }
 
     // 调用油猴 API 进行复制
@@ -159,6 +176,27 @@
         header.appendChild(title);
         header.appendChild(settingsBtn);
         container.appendChild(header);
+
+        // 信息显示区域
+        const infoDisplay = document.createElement('div');
+        infoDisplay.style.cssText = `
+            font-size: 12px;
+            color: #666;
+            background: #f9f9f9;
+            padding: 8px;
+            border-radius: 6px;
+            border: 1px dashed #ccc;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        `;
+        const companyDisplay = document.createElement('div');
+        companyDisplay.innerHTML = `🏢 <span id="gm-company-text">获取中...</span>`;
+        const productDisplay = document.createElement('div');
+        productDisplay.innerHTML = `🏷️ <span id="gm-product-text">获取中...</span>`;
+        infoDisplay.appendChild(companyDisplay);
+        infoDisplay.appendChild(productDisplay);
+        container.appendChild(infoDisplay);
 
         // 设置面板 (默认隐藏)
         const settingsPanel = document.createElement('div');
@@ -284,16 +322,28 @@
 
             if (fetchedCompany && extractedData.company === "获取中...") {
                 extractedData.company = fetchedCompany;
+                const el = document.getElementById('gm-company-text');
+                if (el) el.innerText = formatName(fetchedCompany);
             }
             if (fetchedProduct && extractedData.product === "获取中...") {
                 extractedData.product = fetchedProduct;
+                const el = document.getElementById('gm-product-text');
+                if (el) el.innerText = formatName(fetchedProduct);
             }
 
             // 如果两者都获取到了，或者超时，则停止后台轮询
             if ((fetchedCompany && fetchedProduct) || retryCount >= maxRetries) {
                 clearInterval(fetchTimer);
-                if (extractedData.company === "获取中...") extractedData.company = "未获取到公司名称";
-                if (extractedData.product === "获取中...") extractedData.product = "未获取到商品名称";
+                if (extractedData.company === "获取中...") {
+                    extractedData.company = "未获取到公司名称";
+                    const el = document.getElementById('gm-company-text');
+                    if (el) el.innerText = "未获取到公司名称";
+                }
+                if (extractedData.product === "获取中...") {
+                    extractedData.product = "未获取到商品名称";
+                    const el = document.getElementById('gm-product-text');
+                    if (el) el.innerText = "未获取到商品名称";
+                }
             }
         }, 500);
     }
