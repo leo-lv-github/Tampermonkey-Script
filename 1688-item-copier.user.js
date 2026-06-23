@@ -1,29 +1,40 @@
 // ==UserScript==
-// @name         1688 商品信息极简提取助手
-// @namespace    http://tampermonkey.net/
-// @version      2.0
-// @description  极简版：仅在右下角悬浮一个按钮，一键提取1688商品页面的 URL、公司名称、商品名称，并导出无表头表格格式。
-// @author       SHENZHEN_LEO
-// @match        *://detail.1688.com/offer/*
-// @icon         https://www.google.com/s2/favicons?sz=64&domain=1688.com
-// @grant        GM_setClipboard
+// @name         1688 商品信息极简提取助手
+// @namespace    http://tampermonkey.net/
+// @version      3.0
+// @description  极简版：右下角悬浮面板，一键提取1688商品页面信息，并可一键插入到Google Sheet中，带自定义备注。
+// @author       SHENZHEN_LEO
+// @match        *://detail.1688.com/offer/*
+// @icon         https://www.google.com/s2/favicons?sz=64&domain=1688.com
+// @grant        GM_setClipboard
+// @grant        GM_xmlhttpRequest
+// @grant        GM_setValue
+// @grant        GM_getValue
+// @connect      script.google.com
+// @connect      script.googleusercontent.com
 // ==/UserScript==
 
 (function () {
     'use strict';
 
-    // 预设的 XPath (XML Path Language, 可扩展标记语言路径语言)
+    // ================= 动态配置 =================
+    // 使用 GM_getValue 获取持久化的设置，如果为空则为空字符串
+    let scriptUrl = GM_getValue("scriptUrl", "");
+    let sheetId = GM_getValue("sheetId", "");
+    // ===========================================
+
+    // 预设的 XPath (XML Path Language)
     const XPATH_COMPANY = "/html/body/div[4]/div[2]/div[1]/div[1]/div/a/div[1]/a[1]/h1";
-    const XPATH_PRODUCT = "/html/body/div[4]/div[2]/div[2]/div/div[1]/div/div[3]/div/div[1]/h1";
+    const XPATH_PRODUCT = "/html/body/div[4]/div[2]/div[2]/div/div[1]/div[1]/div[2]/div/div[1]/h1";
 
     // 用于在后台存储抓取到的数据
     const extractedData = {
         company: "获取中...",
         product: "获取中...",
-        url: window.location.origin + window.location.pathname // 自动清理了 URL (Uniform Resource Locator, 统一资源定位系统) 中的追踪参数
+        url: window.location.origin + window.location.pathname // 自动清理了 URL 中的追踪参数
     };
 
-    // 根据 XPath 获取 DOM (Document Object Model, 文档对象模型) 节点文本的辅助函数
+    // 根据 XPath 获取 DOM 节点文本的辅助函数
     function getTextByXPath(xpath) {
         try {
             const result = document.evaluate(xpath, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null);
@@ -34,7 +45,7 @@
         }
     }
 
-    // 调用油猴 API (Application Programming Interface, 应用程序编程接口) 进行复制
+    // 调用油猴 API 进行复制
     function copyToClipboard(text, buttonElement) {
         GM_setClipboard(text, 'text');
         const originalText = buttonElement.innerHTML;
@@ -46,44 +57,220 @@
         }, 1500);
     }
 
-    // 创建右下角悬浮按钮 UI (User Interface, 用户界面)
-    function createFloatingButton() {
-        if (document.getElementById('gm-1688-minimal-btn')) return;
+    // 将数据发送到 Google Sheet
+    function sendToGoogleSheet(buttonElement, remarkText) {
+        if (!scriptUrl) {
+            alert("请先在设置面板中配置 部署 URL");
+            return;
+        }
+        if (!sheetId) {
+            alert("请先在设置面板中配置 Sheet ID");
+            return;
+        }
 
-        const copyBtn = document.createElement('button');
-        copyBtn.id = 'gm-1688-minimal-btn';
-        copyBtn.innerHTML = "📊 一键复制表格";
+        const originalText = buttonElement.innerHTML;
+        buttonElement.innerHTML = "插入中...";
+        buttonElement.disabled = true;
 
-        // 设置样式，固定在最右下角
-        copyBtn.style.cssText = `
-            position: fixed;
-            bottom: 30px;
-            right: 30px;
-            padding: 12px 20px;
-            background: #ff6000;
-            color: #ffffff;
-            border: none;
-            border-radius: 8px;
-            box-shadow: 0 4px 12px rgba(255, 96, 0, 0.4);
-            cursor: pointer;
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-            font-weight: 600;
-            font-size: 14px;
-            z-index: 9999999;
-            transition: all 0.2s ease-in-out;
-        `;
-
-        // 增加鼠标悬停效果
-        copyBtn.onmouseover = () => { copyBtn.style.transform = "scale(1.05)"; };
-        copyBtn.onmouseout = () => { copyBtn.style.transform = "scale(1)"; };
-
-        // 点击复制逻辑（TSV 格式无表头排列）
-        copyBtn.onclick = () => {
-            const rowData = `${extractedData.company}\t${extractedData.product}\t${extractedData.url}`;
-            copyToClipboard(rowData, copyBtn);
+        const payload = {
+            sheetId: sheetId,
+            company: extractedData.company,
+            product: extractedData.product,
+            url: extractedData.url,
+            remark: remarkText
         };
 
-        document.body.appendChild(copyBtn);
+        GM_xmlhttpRequest({
+            method: "POST",
+            url: scriptUrl,
+            headers: {
+                "Content-Type": "application/json"
+            },
+            data: JSON.stringify(payload),
+            onload: function (response) {
+                // Apps Script 返回的重定向可能会有不同状态码
+                if (response.status === 200 || response.status === 302) {
+                    buttonElement.innerHTML = "插入成功 ✓";
+                    buttonElement.style.background = "#4CAF50";
+                } else {
+                    buttonElement.innerHTML = "插入失败 ✗";
+                    buttonElement.style.background = "#f44336";
+                    console.error("插入 Google Sheet 失败:", response.responseText);
+                }
+                setTimeout(() => {
+                    buttonElement.innerHTML = originalText;
+                    buttonElement.style.background = "#0088cc";
+                    buttonElement.disabled = false;
+                }, 2000);
+            },
+            onerror: function (err) {
+                buttonElement.innerHTML = "请求出错 ✗";
+                buttonElement.style.background = "#f44336";
+                console.error("GM_xmlhttpRequest 出错:", err);
+                setTimeout(() => {
+                    buttonElement.innerHTML = originalText;
+                    buttonElement.style.background = "#0088cc";
+                    buttonElement.disabled = false;
+                }, 2000);
+            }
+        });
+    }
+
+    // 创建右下角悬浮 UI
+    function createFloatingUI() {
+        if (document.getElementById('gm-1688-minimal-ui')) return;
+
+        // 面板容器
+        const container = document.createElement('div');
+        container.id = 'gm-1688-minimal-ui';
+        container.style.cssText = `
+            position: fixed;
+            bottom: 30px;
+            right: 30px;
+            padding: 15px;
+            background: #ffffff;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            z-index: 9999999;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            width: 220px;
+            transition: all 0.2s ease-in-out;
+        `;
+
+        // 头部区域：标题与设置图标
+        const header = document.createElement('div');
+        header.style.cssText = `
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        `;
+        const title = document.createElement('div');
+        title.innerHTML = "📦 1688 助手";
+        title.style.cssText = "font-weight: 600; font-size: 14px; color: #333;";
+        const settingsBtn = document.createElement('div');
+        settingsBtn.innerHTML = "⚙️";
+        settingsBtn.style.cssText = "cursor: pointer; font-size: 16px; transition: transform 0.2s;";
+        settingsBtn.onmouseover = () => { settingsBtn.style.transform = "rotate(45deg)"; };
+        settingsBtn.onmouseout = () => { settingsBtn.style.transform = "rotate(0deg)"; };
+        header.appendChild(title);
+        header.appendChild(settingsBtn);
+        container.appendChild(header);
+
+        // 设置面板 (默认隐藏)
+        const settingsPanel = document.createElement('div');
+        settingsPanel.style.cssText = `
+            display: none;
+            flex-direction: column;
+            gap: 8px;
+            padding: 10px;
+            background: #f5f5f5;
+            border-radius: 6px;
+            border: 1px solid #ddd;
+            margin-bottom: 5px;
+        `;
+        
+        // 部署 URL 输入框
+        const urlInput = document.createElement('input');
+        urlInput.type = 'text';
+        urlInput.placeholder = '在此填入 部署 URL';
+        urlInput.value = scriptUrl;
+        urlInput.style.cssText = `
+            width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; font-size: 12px; outline: none;
+        `;
+        urlInput.oninput = (e) => {
+            scriptUrl = e.target.value.trim();
+            GM_setValue("scriptUrl", scriptUrl);
+        };
+        settingsPanel.appendChild(urlInput);
+
+        // Sheet ID 输入框
+        const idInput = document.createElement('input');
+        idInput.type = 'text';
+        idInput.placeholder = '在此填入 Sheet ID';
+        idInput.value = sheetId;
+        idInput.style.cssText = `
+            width: 100%; padding: 6px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; font-size: 12px; outline: none;
+        `;
+        idInput.oninput = (e) => {
+            sheetId = e.target.value.trim();
+            GM_setValue("sheetId", sheetId);
+        };
+        settingsPanel.appendChild(idInput);
+        container.appendChild(settingsPanel);
+
+        // 点击设置图标切换显示设置面板
+        settingsBtn.onclick = () => {
+            settingsPanel.style.display = settingsPanel.style.display === 'none' ? 'flex' : 'none';
+        };
+
+        // 备注输入框
+        const remarkInput = document.createElement('input');
+        remarkInput.type = 'text';
+        remarkInput.placeholder = '在此输入备注...';
+        remarkInput.style.cssText = `
+            width: 100%;
+            padding: 8px 10px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            box-sizing: border-box;
+            font-size: 13px;
+            outline: none;
+            transition: border-color 0.2s;
+        `;
+        remarkInput.onfocus = () => { remarkInput.style.borderColor = '#ff6000'; };
+        remarkInput.onblur = () => { remarkInput.style.borderColor = '#ccc'; };
+        container.appendChild(remarkInput);
+
+        // 插入 Google Sheet 按钮
+        const sheetBtn = document.createElement('button');
+        sheetBtn.innerHTML = "☁️ 一键插入 Sheet";
+        sheetBtn.style.cssText = `
+            width: 100%;
+            padding: 10px;
+            background: #0088cc;
+            color: #ffffff;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 14px;
+            transition: all 0.2s;
+        `;
+        sheetBtn.onmouseover = () => { sheetBtn.style.opacity = "0.9"; };
+        sheetBtn.onmouseout = () => { sheetBtn.style.opacity = "1"; };
+        sheetBtn.onclick = () => {
+            sendToGoogleSheet(sheetBtn, remarkInput.value);
+        };
+        container.appendChild(sheetBtn);
+
+        // 复制按钮
+        const copyBtn = document.createElement('button');
+        copyBtn.innerHTML = "📊 仅复制表格内容";
+        copyBtn.style.cssText = `
+            width: 100%;
+            padding: 10px;
+            background: #ff6000;
+            color: #ffffff;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 14px;
+            transition: all 0.2s;
+        `;
+        copyBtn.onmouseover = () => { copyBtn.style.opacity = "0.9"; };
+        copyBtn.onmouseout = () => { copyBtn.style.opacity = "1"; };
+        copyBtn.onclick = () => {
+            const rowData = `${extractedData.company}\t${extractedData.product}\t${extractedData.url}\t${remarkInput.value}`;
+            copyToClipboard(rowData, copyBtn);
+        };
+        container.appendChild(copyBtn);
+
+        document.body.appendChild(container);
 
         // 建立定时器轮询，应对动态加载的元素
         let retryCount = 0;
@@ -112,9 +299,9 @@
     }
 
     if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', createFloatingButton);
+        document.addEventListener('DOMContentLoaded', createFloatingUI);
     } else {
-        createFloatingButton();
+        createFloatingUI();
     }
 
 })();
