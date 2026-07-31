@@ -263,6 +263,58 @@
         remarkInput.onblur = () => { remarkInput.style.borderColor = '#ccc'; };
         container.appendChild(remarkInput);
 
+        // 快捷备注按钮
+        const quickRemarkContainer = document.createElement('div');
+        quickRemarkContainer.style.cssText = `
+            display: flex;
+            gap: 8px;
+            width: 100%;
+        `;
+        
+        const quickBtnA = document.createElement('button');
+        quickBtnA.innerHTML = "无法提供SDK";
+        quickBtnA.title = "快捷输入：无法提供 SDK";
+        quickBtnA.style.cssText = `
+            flex: 1;
+            padding: 5px 0;
+            background: #f5f5f5;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+            color: #555;
+            transition: all 0.2s;
+        `;
+        quickBtnA.onmouseover = () => { quickBtnA.style.borderColor = '#ff6000'; quickBtnA.style.color = '#ff6000'; };
+        quickBtnA.onmouseout = () => { quickBtnA.style.borderColor = '#ddd'; quickBtnA.style.color = '#555'; };
+        quickBtnA.onclick = () => { 
+            remarkInput.value = remarkInput.value ? remarkInput.value + " 无法提供 SDK" : "无法提供 SDK"; 
+        };
+
+        const quickBtnB = document.createElement('button');
+        quickBtnB.innerHTML = "等待回复";
+        quickBtnB.title = "快捷输入：等待回复";
+        quickBtnB.style.cssText = `
+            flex: 1;
+            padding: 5px 0;
+            background: #f5f5f5;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+            color: #555;
+            transition: all 0.2s;
+        `;
+        quickBtnB.onmouseover = () => { quickBtnB.style.borderColor = '#ff6000'; quickBtnB.style.color = '#ff6000'; };
+        quickBtnB.onmouseout = () => { quickBtnB.style.borderColor = '#ddd'; quickBtnB.style.color = '#555'; };
+        quickBtnB.onclick = () => { 
+            remarkInput.value = remarkInput.value ? remarkInput.value + " 等待回复" : "等待回复"; 
+        };
+
+        quickRemarkContainer.appendChild(quickBtnA);
+        quickRemarkContainer.appendChild(quickBtnB);
+        container.appendChild(quickRemarkContainer);
+
         // 插入 Google Sheet 按钮
         const sheetBtn = document.createElement('button');
         sheetBtn.innerHTML = "☁️ 一键插入 Sheet";
