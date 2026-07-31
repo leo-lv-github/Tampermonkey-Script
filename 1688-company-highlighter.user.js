@@ -1,11 +1,11 @@
 // ==UserScript==
-// @name         1688公司名称精准高亮助手
-// @namespace    http://tampermonkey.net/
-// @version      1.0
-// @description  在1688搜索结果页面通过粘贴列表高亮比对公司名称
-// @author       SHENZHEN_LEO
-// @match        *://s.1688.com/selloffer/*
-// @grant        none
+// @name         1688公司名称精准高亮助手
+// @namespace    http://tampermonkey.net/
+// @version      1.0
+// @description  在1688搜索结果页面通过粘贴列表高亮比对公司名称
+// @author       SHENZHEN_LEO
+// @match        *://s.1688.com/selloffer/*
+// @grant        none
 // ==/UserScript==
 
 (function () {

@@ -1,18 +1,20 @@
 // ==UserScript==
-// @name         1688 商品信息极简提取助手
-// @namespace    http://tampermonkey.net/
-// @version      2.0
-// @description  极简版：仅在右下角悬浮一个按钮，一键提取1688商品页面的 URL、公司名称、商品名称，并导出无表头表格格式。
-// @author       SHENZHEN_LEO
-// @match        *://detail.1688.com/offer/*
-// @icon         https://www.google.com/s2/favicons?sz=64&domain=1688.com
-// @grant        GM_setClipboard
+// @name         1688 商品信息极简提取助手
+// @namespace    http://tampermonkey.net/
+// @version      2.1
+// @description  极简版：仅在右下角悬浮一个按钮，一键提取1688商品页面的 URL、公司名称、商品名称，并导出无表头表格格式。
+// @author       SHENZHEN_LEO
+// @match        *://detail.1688.com/offer/*
+// @match        *://item.1688.com/offer/*
+// @icon         https://www.google.com/s2/favicons?sz=64&domain=1688.com
+// @run-at       document-end
+// @grant        GM_setClipboard
 // ==/UserScript==
 
 (function () {
     'use strict';
 
-    // 预设的 XPath (XML Path Language, 可扩展标记语言路径语言)
+    // 预设的 XPath 和选择器
     const XPATH_COMPANY = "/html/body/div[4]/div[2]/div[1]/div[1]/div/a/div[1]/a[1]/h1";
     const XPATH_PRODUCT = "/html/body/div[4]/div[2]/div[2]/div/div[1]/div/div[3]/div/div[1]/h1";
 
@@ -20,10 +22,10 @@
     const extractedData = {
         company: "获取中...",
         product: "获取中...",
-        url: window.location.origin + window.location.pathname // 自动清理了 URL (Uniform Resource Locator, 统一资源定位系统) 中的追踪参数
+        url: window.location.origin + window.location.pathname // 自动清理了 URL 中的追踪参数
     };
 
-    // 根据 XPath 获取 DOM (Document Object Model, 文档对象模型) 节点文本的辅助函数
+    // 根据 XPath 获取 DOM 节点文本的辅助函数
     function getTextByXPath(xpath) {
         try {
             const result = document.evaluate(xpath, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null);
@@ -32,6 +34,65 @@
             console.error("XPath 解析错误:", e);
             return "";
         }
+    }
+
+    // 鲁棒性更强的商品名称获取函数
+    function getProductTitle() {
+        // 1. 尝试原始 XPath
+        let title = getTextByXPath(XPATH_PRODUCT);
+        if (title) return title;
+
+        // 2. 尝试类选择器
+        const selectors = [
+            'h1.d-title',
+            '.d-title',
+            '.od-pc-offer-title',
+            '.title-text',
+            '.tb-main-title',
+            'h1'
+        ];
+        for (const sel of selectors) {
+            const el = document.querySelector(sel);
+            if (el && el.textContent.trim()) {
+                return el.textContent.trim();
+            }
+        }
+
+        // 3. 兜底解析页面 title
+        if (document.title) {
+            let docTitle = document.title;
+            docTitle = docTitle.replace(/[\-_]阿里巴巴.*/, '');
+            docTitle = docTitle.replace(/【.*?】/, '');
+            return docTitle.trim();
+        }
+
+        return "";
+    }
+
+    // 鲁棒性更强的公司名称获取函数
+    function getCompanyName() {
+        // 1. 尝试原始 XPath
+        let company = getTextByXPath(XPATH_COMPANY);
+        if (company) return company;
+
+        // 2. 尝试类选择器
+        const selectors = [
+            '.company-name',
+            'a.company-name',
+            '.supplier-name',
+            '.od-pc-attribute-supplier .supplier-name',
+            '.shop-title',
+            '.shop-header .shop-title',
+            '.contact-div .name'
+        ];
+        for (const sel of selectors) {
+            const el = document.querySelector(sel);
+            if (el && el.textContent.trim()) {
+                return el.textContent.trim();
+            }
+        }
+
+        return "";
     }
 
     // 调用油猴 API (Application Programming Interface, 应用程序编程接口) 进行复制
@@ -56,22 +117,22 @@
 
         // 设置样式，固定在最右下角
         copyBtn.style.cssText = `
-            position: fixed;
-            bottom: 30px;
-            right: 30px;
-            padding: 12px 20px;
-            background: #ff6000;
-            color: #ffffff;
-            border: none;
-            border-radius: 8px;
-            box-shadow: 0 4px 12px rgba(255, 96, 0, 0.4);
-            cursor: pointer;
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-            font-weight: 600;
-            font-size: 14px;
-            z-index: 9999999;
-            transition: all 0.2s ease-in-out;
-        `;
+            position: fixed;
+            bottom: 30px;
+            right: 30px;
+            padding: 12px 20px;
+            background: #ff6000;
+            color: #ffffff;
+            border: none;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(255, 96, 0, 0.4);
+            cursor: pointer;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            font-weight: 600;
+            font-size: 14px;
+            z-index: 9999999;
+            transition: all 0.2s ease-in-out;
+        `;
 
         // 增加鼠标悬停效果
         copyBtn.onmouseover = () => { copyBtn.style.transform = "scale(1.05)"; };
@@ -92,8 +153,8 @@
         const fetchTimer = setInterval(() => {
             retryCount++;
 
-            const fetchedCompany = getTextByXPath(XPATH_COMPANY);
-            const fetchedProduct = getTextByXPath(XPATH_PRODUCT);
+            const fetchedCompany = getCompanyName();
+            const fetchedProduct = getProductTitle();
 
             if (fetchedCompany && extractedData.company === "获取中...") {
                 extractedData.company = fetchedCompany;
@@ -111,10 +172,34 @@
         }, 500);
     }
 
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', createFloatingButton);
-    } else {
-        createFloatingButton();
+    // 安全初始化函数，确保 document.body 已准备完毕
+    function init() {
+        if (document.body) {
+            createFloatingButton();
+            return;
+        }
+
+        // 轮询作为备用
+        const checkTimer = setInterval(() => {
+            if (document.body) {
+                clearInterval(checkTimer);
+                createFloatingButton();
+            }
+        }, 50);
+
+        // 监听 DOM 树变化
+        if (typeof MutationObserver !== 'undefined') {
+            const observer = new MutationObserver((mutations, obs) => {
+                if (document.body) {
+                    obs.disconnect();
+                    clearInterval(checkTimer);
+                    createFloatingButton();
+                }
+            });
+            observer.observe(document.documentElement, { childList: true });
+        }
     }
+
+    init();
 
 })();
