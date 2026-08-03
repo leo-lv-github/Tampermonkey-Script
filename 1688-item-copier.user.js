@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         1688 商品信息极简提取助手
 // @namespace    http://tampermonkey.net/
-// @version      3.1
+// @version      3.2
 // @description  极简版：右下角悬浮面板，一键提取1688商品页面信息，并可一键插入到Google Sheet中，带自定义备注。
 // @author       SHENZHEN_LEO
 // @match        *://detail.1688.com/offer/*
@@ -25,6 +25,9 @@
 
     // 预设的 XPath (XML Path Language) - 多层试错
     const XPATH_COMPANY = [
+        "//a[contains(@class, 'shop-company-name')]//h1",
+        "//a[contains(@class, 'shop-company-name')]",
+        "//a[@data-trace='SHOP_CREDIT']//h1",
         "/html/body/div[4]/div[2]/div[1]/div[1]/div/a/div[1]/a[1]/h1",
         "/html/body/div[4]/div[1]/div[1]/div[1]/div/a/div[1]/a[1]/h1",
         "/html/body/div[5]/div[2]/div[1]/div[1]/div[1]/a[1]/div[1]/a[1]/h1[1]"
